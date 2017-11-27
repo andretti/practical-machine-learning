@@ -1,0 +1,151 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Andretti"
+date: "November 25, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Practical Machine Language Course Project
+
+### Introduction
+
+Using devices such as *Jawbone Up*, *Nike FuelBand*, and *Fitbit* it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify __*how well they do it*__. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+### Purpose
+
+The purpose of this project is to figure out the manner in which the test sbujects executed their exercices and build a model to predict the outcomes of the exercices based on the provided data.  Analysis of data was conducted based on the "*classe*" variable and other covariates of the training data set.
+
+### Project Data
+
+```{r echo=FALSE,include=FALSE}
+library(knitr)
+library(caret)
+library(rpart)
+library(rattle)
+library(randomForest)
+library(lattice)
+library(ggplot2)
+```
+
+```{r echo=TRUE}
+set.seed(12345)
+
+# Load data from files
+train <- read.csv("data/pml-training.csv", na.strings = c("NA","#DIV/0!",""))
+dim(train)
+
+test <- read.csv("data/pml-testing.csv", na.strings = c("NA","#DIV/0!",""))
+dim(test)
+```
+
+### Exploratory analysis
+
+Look for variables with NA or missing values
+
+```{r echo=TRUE}
+prop_na_vars <- colMeans(is.na(train))
+table(prop_na_vars)
+
+prop_na_rows <- rowMeans(is.na(train))
+table(prop_na_rows)
+```
+
+There are 60 variables and 19,216 rows with values that are at least 62.5% complete that can be used for prediction analysis.
+
+### Cleaning data sets
+
+#### Remove variables with missing (NA) values.
+
+```{r echo=TRUE}
+train <- train[,colSums(is.na(train))==0]
+test <- test[,colSums(is.na(test))==0]
+```
+
+
+#### Remove other variables from the data set that are not directly related to exercise data.
+
+```{r echo=TRUE}
+train <- train[-c(1:6)]
+```
+
+### Splitting training data for analysis and prediction testing
+
+```{r echo=TRUE}
+inTrain <- createDataPartition(train$classe, p=0.6, list=FALSE)
+training <- train[inTrain,]
+testing <- train[-inTrain,]
+```
+
+
+Exclude near-zero variance variables (predictors) and remove the index variable (first variable of the dataset).  The NZV variables are removed as those variables and values do not contribue to formulate a predictive model.
+
+```{r echo=TRUE}
+nzv <- nearZeroVar(training, saveMetrics=TRUE)
+training <- training[,nzv$nzv==FALSE]
+training <- training[c(-1)]
+
+nzv <- nearZeroVar(testing, saveMetrics=TRUE)
+testing <- testing[,nzv$nzv==FALSE]
+testing <- testing[c(-1)]
+
+dim(training)
+dim(testing)
+```
+
+### Cleaning test data
+
+```{r echo=TRUE}
+trainColNames <- colnames(training)
+trainColNames_noClasse <- colnames(training[,-53])
+testing <- testing[trainColNames]
+test <- test[trainColNames_noClasse]
+
+dim(test)
+```
+
+## Prediction Algorithms 
+
+Prediction of the outcome has been performed with Decision Trees and Random Forests.
+
+
+## Predicting with Decision Trees
+
+```{r echo=TRUE}
+modFitx1 <- rpart(classe ~ ., data=training, method="class")
+fancyRpartPlot(modFitx1)
+
+predictX1 <- predict(modFitx1, testing, type="class")
+confMtx <- confusionMatrix(predictX1, testing$classe)
+confMtx
+
+plot(confMtx$table, col=confMtx$byClass, main=paste("Decision Tree Confusion Matrix: Accuracy = ", round(confMtx$overall['Accuracy'],4)))
+```
+
+## Predicting with Random Forests
+
+```{r echo=TRUE}
+modFitX2 <- randomForest(classe~., data=training)
+predictX2 <- predict(modFitX2, testing, type="class")
+confMtxRndForest <- confusionMatrix(predictX2, testing$classe)
+confMtxRndForest
+
+plot(modFitX2,main="Random Forest on Test Data")
+
+plot(confMtxRndForest$table, col=confMtxRndForest$byClass, main=paste("Random Forest Confusion Matrix: Accuracy = ",round(confMtxRndForest$overall['Accuracy'],4)))
+```
+
+## Predicting on the Test data
+
+```{r echo=TRUE}
+predictTest <- predict(modFitX2,test,type="class")
+predictTest
+```
+
+## Conclusion
+
+Predicting with Random Forests yield a greater accurracy compared to predicting with Prediction Trees.  The "out of sample" error is much smaller for the Random Forest prediction --- `r 1-.9943`% --- as opposed to `r 1-0.7267`% for Prediction Trees.
+
